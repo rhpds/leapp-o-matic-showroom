@@ -36,3 +36,32 @@ package-lock.json
 
 # Ignore yarn.lock for Yarn
 yarn.lock
+
+# =============================================================================
+# Lab Documentation - Development and Tracking Files
+# DO NOT COMMIT - These are for development/reference only
+# =============================================================================
+
+# Corrections and change tracking files (internal documentation)
+CORRECTIONS_MADE.md
+CORRECTIONS_SCENARIO_DETAILS.md
+CORRECTIONS_RHEL_VERSIONS.md
+REVIEW_AND_CORRECTIONS.md
+
+# Setup and reference guides (internal documentation)
+README_UPDATES.md
+IMAGES_GUIDE.md
+IMAGES_QUICK_REFERENCE.txt
+IMAGES_SETUP_SUMMARY.md
+PREVIEW_GUIDE.md
+
+# Antora build output
+build/
+
+# =============================================================================
+# Only commit the actual lab content:
+# - content/modules/ROOT/pages/rhel10-upgrader-aap.adoc
+# - content/modules/ROOT/images/*.png (screenshot files)
+# - content/modules/ROOT/nav.adoc
+# - content/antora.yml
+# =============================================================================

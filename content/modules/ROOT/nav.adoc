@@ -1,1 +1,2 @@
 * xref:index.adoc[What is Showroom?]
+* xref:rhel10-upgrader-aap.adoc[RHEL 10 Upgrade with AAP]

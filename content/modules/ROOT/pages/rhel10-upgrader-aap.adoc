@@ -1,0 +1,416 @@
+= RHEL 10 Upgrade with Ansible Automation Platform
+:navtitle: RHEL 10 Upgrader AAP Lab
+:page-attributes: labname=LEAPP-o-matic-showroom
+
+In this lab, you will deploy the RHEL 10 Upgrader role through Ansible Automation Platform (AAP). You will configure credentials, execute workflows, and experience how the role intelligently manages a complex system upgrade using the LEAPP upgrade utility.
+
+== What You Will Learn
+
+* How to configure Red Hat Subscription Manager (RHSM) credentials in AAP
+* How the role-rhel10-upgrader automates RHEL 9 to RHEL 10 upgrades
+* Why a workflow with correct node configuration succeeds where an incorrect one fails
+* How the role validates the upgrade path using LEAPP's pre-upgrade analysis
+
+== The Role: role-rhel10-upgrader
+
+=== Purpose
+
+The `role-rhel10-upgrader` role automates an end-to-end upgrade from RHEL 9 to RHEL 10 using the LEAPP utility. Rather than blindly running the upgrade, the role uses LEAPP's JSON report as a **gatekeeper**: it parses the report to decide whether the system is safe to upgrade or should stop to prevent a broken system.
+
+=== Key Capabilities
+
+* **Phase 1: Repositories** — Sets RHEL 9.6 as the target and prepares the package repositories
+* **Phase 2: Update** — Brings the current OS to the latest minor version and reboots
+* **Phase 3: Upgrade** — Runs LEAPP preupgrade analysis, fetches and reviews the report, then triggers the final transformation to RHEL 10
+* **Phase 4: Post-Upgrade Verification** — After reboot into RHEL 10, the role automatically:
+  ** Resets the Python interpreter to `/usr/bin/python3` (since Python 3.9 no longer exists)
+  ** Refreshes Ansible facts to get accurate system state
+  ** Validates the OS version and kernel contain RHEL 10 indicators
+  ** Confirms RHEL 10 repositories are enabled
+  ** Validates Red Hat GPG keys
+  ** Detects failed systemd units
+  ** Cleans up LEAPP packages and DNF metadata
+  ** Scans for configuration conflicts (`.rpmnew` and `.rpmsave` files)
+
+=== Dependencies
+
+The role requires external Ansible roles that must be installed:
+
+* `role-rhsm-registration` — Handles Red Hat Subscription Manager registration
+* `role-insights-registration` — Manages Red Hat Insights registration (mandatory for LEAPP pre-upgrade analysis)
+
+NOTE: If AAP is configured to automatically download roles, nothing else needs installing.
+
+image::aap-job.config.png[AAP Job Settings, width=600]
+
+The role automatically installs required packages:
+* `LEAPP-upgrade` — The core upgrade engine
+* `python3-dnf-plugin-versionlock` — Manages package constraints during upgrade
+
+== Prerequisites
+
+* AAP Controller with network access to your RHEL hosts
+* RHEL 9 systems to be upgraded (at least 2 GB free memory for safety)
+* Valid Red Hat subscription credentials
+* Insights registration enabled on target systems
+
+== Part 1: Configure RHSM Credentials in AAP
+
+=== Step 1: Access AAP Controller
+
+Log in to your AAP Controller at the URL provided by your instructor.
+
+=== Step 2: Configure the RHSM Machine Credential
+
+. Navigate to **Credentials** in the left sidebar.
+. Click **RHSM credential**. This is a custom credential type that securely stores your Red Hat username and password for subscription management created for this demo.
+. Enter the following details:
+  ** **Username:** Enter your Red Hat username (the one you use to log into access.redhat.com)
+  ** **Password:** Enter your Red Hat account password
+. Click **Save**.
+
+image::rhsm-credential.png[RHSM Credential, width=600]
+
+[WARNING]
+====
+Never hardcode credentials in playbooks. Always use AAP credentials and pass them as variables to the role. This lab demonstrates how to properly inject credentials via extra variables.
+====
+
+== Part 2: Execute the Workflow (Four Nodes – Expected Failure)
+
+In this part, you will run a workflow configured with four nodes and observe why it fails.
+
+=== Understanding the Workflow Structure
+
+The workflow consists of five sequential steps (nodes in the workflow template). Each workflow step triggers a job template, and the job templates correspond directly to the role's internal task phases:
+
+[cols="1,2,3",options="header"]
+|===
+| Workflow Step | Job Template | What This Step Does
+
+| Step 1
+| `LEAPP 01: Preflight`
+| Validates system requirements (memory, disk space, OS compatibility) — will succeed on all nodes
+
+| Step 2
+| `LEAPP 02: RHSM Registration`
+| Registers systems with Red Hat Subscription Manager — will succeed on all nodes
+
+| Step 3
+| `LEAPP 03: Insights Registration`
+| Registers systems with Red Hat Insights (required for LEAPP analysis) — will succeed on all nodes
+
+| Step 4
+| `LEAPP 04: Upgrade Execution`
+| Executes the upgrade (repositories, package updates, LEAPP transformation) — will fail on node3 and node4 during Step 1 preflight checks
+
+| Step 5
+| `LEAPP 05: Post-Upgrade Verification`
+| Post-upgrade validation (OS version, kernel, services) — will not run due to Step 4 failure on node3 and node4
+|===
+
+**The problem:** Step 4 (Upgrade Execution) targets four nodes (`node1,node2,node3,node4`), but:
+
+* **node1** — RHEL 9.5 with sufficient memory (≥2 GB) — upgrade succeeds
+* **node2** — RHEL 9.7 with sufficient memory (≥2 GB) — upgrade succeeds
+* **node3** — RHEL 9 but with **less than 2 GB free memory** — preflight check fails, upgrade aborted
+* **node4** — **RHEL 8** (not RHEL 9) — preflight check fails immediately, incompatible OS version
+
+**Important note about RHEL 9.x versions:** You do not need to be on any specific RHEL 9 minor version (such as 9.6) to upgrade to RHEL 10. The role's upgrade execution process normalizes the system through multiple internal steps:
+
+* **Repository Setup** — The role sets RHEL 9.6 as the intermediate target and prepares repositories. This aligns all RHEL 9.x systems to a common minor version baseline.
+* **Package Update** — Brings the system to the latest available version within RHEL 9.x.
+* **LEAPP Transformation** — Runs LEAPP preupgrade analysis and final RHEL 10 transformation.
+
+This design allows you to start an upgrade from node1 (RHEL 9.5) and node2 (RHEL 9.7) without requiring any pre-upgrade manual version alignment.
+
+This scenario demonstrates why the role's preflight validation is critical: it catches incompatible or under-resourced systems **before** attempting a destructive upgrade, preventing data loss or system corruption.
+
+=== Step 1: Launch the Workflow
+
+. Navigate to **Templates** > **Workflow Templates** and choose `WORKFLOW: Leapp-O-Matic RHEL 10 Migration`.
+. Click **Launch**.
+. When prompted for inventory, ensure the following are set:
+  ** **Inventory:** Demo Inventory
+  ** **Limit**: Leave blank to target all nodes in the inventory
+. Next screen:
+  ** **Target nodes:** Configured to `node1,node2,node3,node4`.
+
+image::all-nodes.png[Nodes selection, width=600]
+
+. Click **Next** and then **Launch**.
+
+image::wf-start.png[Workflow launch, width=600]
+
+=== Step 2: Observe the Execution fail
+
+Watch the workflow execution in real-time. The first time (all four nodes execution) will fail in preflight phase as node3 and node4 do not meet the requirements. 
+
+ ** **node3** — **FAILS during preflight checks:** Memory check fails (`ERROR: Insufficient memory. Current: 1.5 GB, Required: 2.0 GB`)
+
+image::node3-fail.png[Node 3 Failure, width=600]
+
+  ** **node4** — **FAILS during preflight checks:** OS version check fails (`ERROR: Unsupported operating system. Expected: RHEL 9, Found: RHEL 8`)
+
+image::node4-fail.png[Node 4 Failure, width=600]
+
+This scenario demonstrates the role's critical safety features: **the preflight validation catches incompatible systems (wrong OS version) and under-resourced systems (insufficient memory) before any destructive operations occur.** This prevents data loss and system corruption.
+
+=== Step 3: Review the Job Output
+
+When running, you can click on the different workflow nodes to see the detailed output of each job template. For example, click into **LEAPP 01: Preflight** to see the preflight checks for each node.
+
+Look for messages like:
+[source]
+----
+TASK [role-rhel10-upgrader : Perform pre-flight checks for RHEL 10 upgrade] ****
+fatal: [node3]: FAILED! => {"msg": "Preflight check failed: Insufficient free memory", "free_memory_mb": 1536, "required_memory_mb": 2048}
+
+fatal: [node4]: FAILED! => {"msg": "Preflight check failed: OS version not supported", "ansible_distribution": "RedHat", "ansible_distribution_version": "8.0"}
+----
+
+These errors confirm the role's validation working correctly: **node3 fails due to insufficient memory (1.5 GB < 2.0 GB required), and node4 fails because it is RHEL 8 instead of RHEL 9.** This demonstrates why the preflight phase is mandatory — it stops incompatible upgrades before they cause system damage.
+
+image::nodes-fail-summary.png[Failed Nodes Summary, width=600]
+
+== Part 3: Execute the Workflow (Two Nodes – Expected Success)
+
+In this part, you will run the workflow with only node1 and node2, which meet all requirements and will upgrade successfully.
+
+=== Step 1: Observe the Execution Succeed
+
+Execute the workflow again with only node1 and node2 as targets. This time, the workflow will complete successfully across node1 and node2 target nodes.
+
+. Navigate to **Templates** > **Workflow Templates** and choose `WORKFLOW: Leapp-O-Matic RHEL 10 Migration`.
+. Click **Launch**.
+. When prompted for inventory, ensure the following are set:
+  ** **Inventory:** Demo Inventory
+  ** **Limit**: Write `node1,node2` to target only those two nodes. 
+
+image::node-limit.png[AAP Job Settings, width=600]
+
+. Next screen:
+  ** **Target nodes:** Configured to `node1,node2` (all in parallel)
+
+image::nodes-selection.png[Nodes Selection, width=600]
+
+Watch the workflow as it executes correctly in sequence:
+
+. **Node 1 starts:** The five workflow nodes execute in order for node1:
+  .. **LEAPP 01: Preflight** — System validation on node1 passes
+  .. **LEAPP 02: RHSM Registration** — node1 registers with Red Hat Subscription Manager
+  .. **LEAPP 03: Insights Registration** — node1 registers with Red Hat Insights
+  .. **LEAPP 04: Upgrade Execution** — All five role task phases run sequentially:
+     ... Phase 1: Repositories configured for RHEL 10
+     ... Phase 2: System updated to latest RHEL 9.x and reboots
+     ... Phase 3: LEAPP preupgrade analysis runs, report is generated and reviewed
+     ... Phase 3 (continued): Final RHEL 10 transformation executes
+     ... Reboot into RHEL 10 occurs
+  .. **LEAPP 05: Post-Upgrade Verification** — node1 validates RHEL 10 OS version, kernel, GPG keys, services, and cleans up upgrade artifacts
+
+. **Node 1 completes successfully** — The role validates that node1 is now running RHEL 10, resets the Python interpreter to `/usr/bin/python3`, and confirms all critical systemd services are running.
+
+. **Node 2 starts:** Only after node1 finishes, node2 begins the same sequence.
+  .. Repeats all five workflow nodes and five role task phases in order
+  .. Succeeds identically to node1 without any lock contention
+
++
+During Phase 1 (Repositories), the role normalizes node1 and node2 to RHEL 9.6 before proceeding with the upgrade. You do not need to manually align RHEL 9.x versions — the role handles this automatically.
+
+. **Phase 5 (Post-Upgrade Verification)** will succeed on selected nodes — The role validates RHEL 10 OS version, kernel, GPG keys, services, and cleans up upgrade artifacts.
+
+=== Step 2: Review Successful Job Output
+
+Click into the **LEAPP 04: Upgrade Execution** job for Node 1. You will see successful task output like:
+
+[source]
+----
+TASK [role-rhel10-upgrader : Perform pre-flight checks] ****
+ok: [node1] => {"preflight_status": "passed", "free_memory_mb": 2560}
+
+TASK [role-rhel10-upgrader : Configure repositories and lock release version] ****
+ok: [node1] => {"changed": true, "repositories_configured": true}
+
+TASK [role-rhel10-upgrader : Update all packages to the latest available versions] ****
+ok: [node1] => {"changed": true, "packages_updated": 156}
+
+TASK [role-rhel10-upgrader : Perform the RHEL 10 upgrade] ****
+ok: [node1] => {"LEAPP_status": "transformation_complete", "rebooted": true}
+
+TASK [role-rhel10-upgrader : Perform the RHEL 10 post upgrade] ****
+ok: [node1] => {"os_version": "10.0", "kernel_el10": true, "python_reset": true, "services_healthy": true}
+----
+
+Then click into **LEAPP 05: Post-Upgrade Verification** to see the validation tasks complete successfully.
+
+image::nodes-success.png[Successful Upgrade, width=600]
+
+=== Step 3: Compare the Two Workflow Runs
+
+[cols="2,3,3",options="header"]
+|===
+| Aspect | Four-Node Workflow (Partial Failure) | Two-Node Workflow (Succeeded)
+
+| Target Nodes
+| Four nodes: `node1` (RHEL 9.5, 4 GB RAM), `node2` (RHEL 9.7, 4 GB RAM), `node3` (RHEL 9, 1.5 GB RAM), `node4` (RHEL 8, 4 GB RAM)
+| Two nodes: `node1` (RHEL 9.5, 4 GB RAM), `node2` (RHEL 9.7, 4 GB RAM)
+
+| Workflow Steps 1–3 Results
+| **node1** and **node2** pass Steps 1–3; **node3** and **node4** fail at Step 1 (Preflight)
+| Both target nodes pass Steps 1–3
+
+| Step 4 Results (Upgrade Execution)
+| **node1** ✓ Succeeds; **node2** ✓ Succeeds; **node3** ✗ Fails (insufficient memory); **node4** ✗ Fails (RHEL 8)
+| **node1** ✓ Succeeds; **node2** ✓ Succeeds
+
+| RHEL Version Normalization
+| The role automatically normalizes node1 (9.5) and node2 (9.7) to RHEL 9.6 as the intermediate target before upgrading to RHEL 10. No manual version alignment needed.
+| The role automatically normalizes node1 (9.5) and node2 (9.7) to RHEL 9.6 before upgrading to RHEL 10.
+
+| Why Failures Occur
+| Preflight validation catches real incompatibilities: node3 has insufficient memory, node4 is wrong OS version. But node1 and node2 succeed despite different minor versions because the role handles version normalization.
+| Both nodes meet all requirements and upgrade successfully. Version differences (9.5 vs 9.7) are handled transparently by the role's internal normalization.
+
+| Step 5 Result (Post-Upgrade Verification)
+| Never runs on node3 and node4 — Step 4 failures prevent it
+| Runs successfully on both nodes after Step 4 completion
+
+| Key Learning
+| The role's preflight checks prevent destructive operations on incompatible/under-resourced systems — protecting data and system integrity
+| With compatible systems, the serial workflow succeeds completely
+
+| Time
+| Faster (parallel)
+| Slower (serial)
+|===
+
+== Part 4: Verification and Post-Upgrade Checks
+
+Once both workflows have completed, verify the upgrade on the nodes that succeeded.
+
+=== Verify Node Upgrades Manually
+
+Once the corrected workflow completes, log into each upgraded node to confirm the upgrade:
+
+[source,bash]
+----
+ssh node1
+cat /etc/os-release | grep VERSION_ID
+uname -r
+sudo systemctl is-system-running
+----
+
+Expected output:
+[source]
+----
+VERSION_ID="10.0"
+6.11.x-x-generic el10 (or similar RHEL 10 kernel version)
+running
+----
+
+=== Check for Configuration Conflicts
+
+The role reports any configuration conflicts (`.rpmnew` / `.rpmsave` files) in `/root/upgrade_report.txt`. Review them:
+
+[source,bash]
+----
+ssh node1
+sudo cat /root/upgrade_report.txt
+sudo find /etc -name "*.rpmnew" -o -name "*.rpmsave"
+----
+
+These require manual review (e.g., `/etc/ssh/sshd_config.rpmnew`) to decide whether to adopt new defaults or keep old configs. The role does not auto-apply them to prevent breaking critical services.
+
+=== Verify Repository Configuration
+
+Confirm RHEL 10 repositories are enabled:
+
+[source,bash]
+----
+ssh node1
+sudo subscription-manager repos --list-enabled | grep rhel-10
+----
+
+Expected output:
+[source]
+----
+Repo ID: rhel-10-for-x86_64-baseos-rpms
+Repo ID: rhel-10-for-x86_64-appstream-rpms
+----
+
+== Key Takeaways
+
+. **Preflight Validation is Critical:** The role's preflight phase catches incompatible systems (wrong OS version) and under-resourced systems (insufficient memory) **before** any destructive operations. This prevents data loss and system corruption. In the four-node scenario, node3 and node4 fail safely at preflight, not during the destructive upgrade phase.
+
+. **Know Your Prerequisites:** RHEL 10 upgrades require:
+    ** **Any RHEL 9.x** as the source OS (9.5, 9.6, 9.7, etc. — the role normalizes to RHEL 9.6 during Phase 1)
+    ** At least 2 GB free memory during upgrade
+    ** Red Hat subscription with appropriate entitlements
+    ** Red Hat Insights registration for LEAPP analysis
++
+The role's intelligent version normalization means you don't need to manually upgrade your RHEL 9.5 systems to RHEL 9.6 before upgrading to RHEL 10 — the role handles this transparently.
+
+. **RHEL 9.x Version Normalization:** You do not need to be on a specific RHEL 9 minor version (such as 9.6) to upgrade to RHEL 10. The role automatically normalizes **any RHEL 9.x** (9.5, 9.6, 9.7, etc.) to RHEL 9.6 as the intermediate target during Phase 1. This eliminates pre-upgrade version alignment work and makes the upgrade process more flexible for mixed-version environments.
+
+. **Sequential Execution Matters:** Running upgrades serially ensures predictable behavior, clean error reporting, and the ability to debug issues on one node before proceeding to the next.
+
+. **Credential Management:** AAP separates credentials from playbook code. Always pass RHSM credentials via job extra variables or AAP credentials, never hardcode them.
+
+. **Intelligent Gatekeeping:** The role uses LEAPP's JSON report to make safe upgrade decisions, not running blindly. Even if preflight passes, LEAPP analysis may identify compatibility issues that prevent the upgrade.
+
+. **Post-Upgrade Validation:** Automated validation of OS version, kernel, GPG keys, and systemd services prevents silent failures and catches issues early.
+
+. **Configuration Conflicts:** RPM preserves existing configs, leaving `.rpmnew` files that require manual review. Document and communicate this expectation to your teams.
+
+. **Idempotency:** The role is idempotent. Re-running it on a RHEL 10 system is safe and will skip upgrade phases, making troubleshooting and retry scenarios straightforward.
+
+== Troubleshooting
+
+[cols="2,3",options="header"]
+|===
+| Issue | Resolution
+
+| Preflight fails: "Insufficient free memory"
+| The target node has less than 2 GB free memory. LEAPP and subscription-manager need this headroom during the upgrade. Add more memory to the node or stop unnecessary services to free RAM before retrying.
+
+| Preflight fails: "Unsupported operating system"
+| The target system is not RHEL 9. This role only upgrades RHEL 9 to RHEL 10. Verify the node is actually running RHEL 9 (`cat /etc/os-release`). RHEL 8 or earlier cannot be upgraded directly to RHEL 10; upgrade to RHEL 9 first.
+
+| Preflight fails: "System has non-standard configuration"
+| The target system has other issues detected by the preflight phase (e.g., unsupported packages, missing dependencies, kernel issues). Review the complete preflight output in the job logs for specific details.
+
+| "LEAPP report indicated issues; aborting upgrade"
+| LEAPP analysis found incompatibilities (e.g., deprecated packages, known broken applications). Review the LEAPP report in `/var/log/LEAPP/LEAPP-report.json` on the target system. Address the reported incompatibilities or update them to compatible versions before retrying.
+
+| "Python 3.9 not found" (post-reboot)
+| This is expected and handled automatically by the post-upgrade phase. If you see it in the job output, it confirms the role properly reset the Python interpreter to `/usr/bin/python3`.
+
+| ".rpmnew configuration files present"
+| These require manual review. SSH into the node and use `diff /etc/file /etc/file.rpmnew` to compare and decide whether to adopt new defaults. Use `mv /etc/file.rpmnew /etc/file` or `rm /etc/file.rpmnew` as appropriate.
+
+| "stale RHUI repository files" error (on cloud RHEL images)
+| This is expected on AWS/Azure/GCP RHEL images and non-blocking. The role reports it but continues. Permanently fix by re-registering the host for RHEL 10 content. This does not affect on-prem (libvirt/bare-metal) hosts.
+
+| Node memory too low during upgrade
+| Ensure at least 2 GB free memory on the target node. On memory-constrained instances (AWS t3.micro/t3.small), upgrade may fail even if preflight passes because subscription-manager and dnf compete for RAM during concurrent operations. Add more memory or use larger instances.
+
+| Job hangs during reboot phase
+| The role waits for the system to come back online after reboot. If it hangs, verify network connectivity and that SSH is still functional on the target node. Check the target node's console or BIOS for boot issues.
+
+| Multiple nodes in same workflow have different failure reasons
+| This is normal and demonstrates why the role's validation is important. Each node is independently validated; some may pass (and upgrade) while others fail due to their specific configuration. Review each node's output separately to understand why it passed or failed.
+|===
+
+== Next Steps
+
+* Review the role repository: https://gitlab.com/ansible-ssa/role-rhel10-upgrader
+* Explore the LEAPP upgrade utility: https://access.redhat.com/articles/3555193
+* Read about Red Hat Insights integration: https://access.redhat.com/documentation/en-us/red_hat_insights
+* Plan a production upgrade strategy for your environment
+
+== Additional Resources
+
+* **Red Hat Subscription Manager:** https://access.redhat.com/documentation/en-us/red_hat_subscription_management/
+* **LEAPP Documentation:** https://access.redhat.com/articles/3555193
+* **RHEL 10 Release Notes:** https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/10/
+* **Ansible Best Practices:** https://docs.ansible.com/ansible/latest/user_guide/index.html
