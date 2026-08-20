@@ -41,7 +41,7 @@ The role requires external Ansible roles that must be installed:
 
 NOTE: If AAP is configured to automatically download roles, nothing else needs installing.
 
-image::aap-job.config.png[AAP Job Settings, width=600]
+image::aap-job-config.png[AAP Job Settings, width=600]
 
 The role automatically installs required packages:
 * `LEAPP-upgrade` — The core upgrade engine
