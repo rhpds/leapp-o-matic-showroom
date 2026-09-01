@@ -1,0 +1,109 @@
+= Architecture & Design
+:navtitle: Architecture & Design
+
+Before running the workflow, it helps to understand how Leapp-O-Matic is built. This module explains the three layers you will interact with: the *role phases* that do the work, the *VM layout* the lab runs against, and the *AAP workflow* that orchestrates everything.
+
+== The Role: role-rhel10-upgrader
+
+The `role-rhel10-upgrader` role automates an end-to-end upgrade from RHEL 9 to RHEL 10 using the LEAPP utility. Rather than blindly running the upgrade, the role uses LEAPP's JSON report as a *gatekeeper*: it parses the report to decide whether the system is safe to upgrade or should stop to prevent a broken system.
+
+=== Role Phases
+
+The role's work is organized into sequential phases. Each phase must succeed before the next begins:
+
+[cols="1,3",options="header"]
+|===
+| Phase | What It Does
+
+| *Preflight*
+| Validates system requirements — supported OS version (RHEL 9), sufficient free memory (≥ 2 GB), and disk space. This is the safety gate that stops unsafe upgrades before any destructive change.
+
+| *Phase 1: Repositories*
+| Sets RHEL 9.6 as the intermediate target and prepares the package repositories. This normalizes any RHEL 9.x host to a common baseline.
+
+| *Phase 2: Update*
+| Brings the current OS to the latest minor version within RHEL 9.x and reboots.
+
+| *Phase 3: Upgrade*
+| Runs the LEAPP pre-upgrade analysis, fetches and reviews the JSON report, then triggers the final transformation to RHEL 10 (followed by a reboot into RHEL 10).
+
+| *Phase 4: Post-Upgrade Verification*
+| After the reboot into RHEL 10, resets the Python interpreter to `/usr/bin/python3`, refreshes facts, validates the OS version and kernel, confirms RHEL 10 repositories and GPG keys, detects failed systemd units, cleans up LEAPP packages and DNF metadata, and scans for `.rpmnew`/`.rpmsave` configuration conflicts.
+|===
+
+=== Version Normalization
+
+A key design decision: you do *not* need every host on the same RHEL 9 minor version to start. During Phase 1, the role normalizes *any RHEL 9.x* system (9.5, 9.6, 9.7, …) to RHEL 9.6 as the intermediate target before upgrading to RHEL 10. This eliminates manual pre-upgrade version alignment and makes the role practical for mixed-version fleets.
+
+=== Dependencies
+
+The role relies on two external Ansible roles, which AAP downloads automatically when configured to do so:
+
+* `role-rhsm-registration` — handles Red Hat Subscription Manager registration.
+* `role-insights-registration` — manages Red Hat Insights registration (mandatory for LEAPP pre-upgrade analysis).
+
+It also installs the packages the upgrade needs, including `leapp-upgrade` (the core upgrade engine) and `python3-dnf-plugin-versionlock` (to manage package constraints during the upgrade).
+
+== VM Layout
+
+The lab runs against a small inventory of four RHEL nodes, deliberately configured to represent a realistic, mixed fleet. Two nodes are valid upgrade candidates; two are not, so you can observe the safety behavior:
+
+[cols="1,2,2",options="header"]
+|===
+| Node | Configuration | Expected Outcome
+
+| `node1`
+| RHEL 9.5, ~4 GB RAM
+| ✓ Upgrades successfully
+
+| `node2`
+| RHEL 9.7, ~4 GB RAM
+| ✓ Upgrades successfully
+
+| `node3`
+| RHEL 9, < 2 GB free memory
+| ✗ Fails at preflight (insufficient memory)
+
+| `node4`
+| RHEL 8, ~4 GB RAM
+| ✗ Fails at preflight (unsupported OS version)
+|===
+
+`node1` and `node2` demonstrate version normalization in action (9.5 and 9.7 both upgrade cleanly). `node3` and `node4` demonstrate the preflight gate catching an under-resourced host and an incompatible host respectively.
+
+== AAP Workflow Structure
+
+In Ansible Automation Platform, the upgrade is exposed as a *workflow template* named `WORKFLOW: Leapp-O-Matic RHEL 10 Migration`. The workflow chains five sequential steps, each backed by a job template that maps to the role's phases:
+
+[cols="1,2,3",options="header"]
+|===
+| Workflow Step | Job Template | Purpose
+
+| Step 1
+| `LEAPP 01: Preflight`
+| Validates system requirements (memory, disk, OS compatibility).
+
+| Step 2
+| `LEAPP 02: RHSM Registration`
+| Registers systems with Red Hat Subscription Manager.
+
+| Step 3
+| `LEAPP 03: Insights Registration`
+| Registers systems with Red Hat Insights (required for LEAPP analysis).
+
+| Step 4
+| `LEAPP 04: Upgrade Execution`
+| Runs the upgrade — repositories, package updates, and the LEAPP transformation to RHEL 10.
+
+| Step 5
+| `LEAPP 05: Post-Upgrade Verification`
+| Validates the upgraded system (OS version, kernel, services) and cleans up artifacts.
+|===
+
+Because the steps run in sequence, a failure at an early step (for example, preflight) stops the later, destructive steps from ever running against that node. This is the mechanism that makes the "fail safe, not fail late" principle concrete.
+
+=== Credential Separation
+
+Credentials are never stored in the role or playbooks. Instead, RHSM username and password are held in an AAP *credential* and injected into jobs at runtime. You will configure this credential in the first part of the hands-on lab.
+
+With the architecture in mind, continue to the xref:rhel10-upgrader-aap.adoc[Hands-On Lab] to run the workflows yourself.

@@ -1,2 +1,5 @@
-* xref:index.adoc[What is Showroom?]
-* xref:rhel10-upgrader-aap.adoc[RHEL 10 Upgrade with AAP]
+* xref:index.adoc[Welcome]
+* xref:01-overview.adoc[Overview]
+* xref:02-details.adoc[Architecture & Design]
+* xref:rhel10-upgrader-aap.adoc[Hands-On Lab: RHEL 10 Upgrade with AAP]
+* xref:99-conclusion.adoc[Conclusion]

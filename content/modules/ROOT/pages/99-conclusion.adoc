@@ -1,0 +1,28 @@
+= Conclusion
+:navtitle: Conclusion
+
+Congratulations — you have completed the Leapp-O-Matic lab and automated a RHEL 9 → RHEL 10 upgrade end to end with Ansible Automation Platform.
+
+== What You Learned
+
+* *Automated, validated upgrades.* You used the `role-rhel10-upgrader` role, driven through an AAP workflow, to upgrade RHEL 9 systems to RHEL 10 with LEAPP — no manual, per-host steps required.
+* *Preflight is the safety net.* You saw a workflow *fail safely* on `node3` (insufficient memory) and `node4` (RHEL 8, unsupported OS). The role caught both *before* any destructive change, protecting those systems from a half-completed upgrade.
+* *Version normalization.* `node1` (RHEL 9.5) and `node2` (RHEL 9.7) upgraded successfully without manual version alignment, because the role normalizes any RHEL 9.x host to RHEL 9.6 during Phase 1.
+* *Secure credential handling.* You configured RHSM credentials in AAP and injected them at runtime instead of hardcoding secrets in playbooks.
+* *Post-upgrade verification.* You verified the upgraded nodes (OS version, kernel, enabled repositories) and reviewed post-upgrade tasks such as `.rpmnew`/`.rpmsave` configuration conflicts.
+
+== Next Steps
+
+* Plan a production upgrade strategy for your own environment, applying the "fail safe, not fail late" principle.
+* Review the LEAPP pre-upgrade report format so you can interpret and act on reported incompatibilities.
+* Extend the workflow to fit your fleet — for example, adding notifications, approval gates, or scheduling for maintenance windows.
+* Integrate Red Hat Insights to continuously track upgrade readiness across your systems.
+
+== References
+
+* Role repository: https://gitlab.com/ansible-ssa/role-rhel10-upgrader[role-rhel10-upgrader]
+* LEAPP upgrade utility: https://access.redhat.com/articles/3555193[Upgrading from RHEL — LEAPP]
+* Red Hat Insights: https://access.redhat.com/documentation/en-us/red_hat_insights[Red Hat Insights documentation]
+* Red Hat Subscription Manager: https://access.redhat.com/documentation/en-us/red_hat_subscription_management/[RHSM documentation]
+* RHEL 10 Release Notes: https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/10/[RHEL 10 documentation]
+* Ansible Automation Platform: https://docs.ansible.com/ansible/latest/[Ansible documentation]

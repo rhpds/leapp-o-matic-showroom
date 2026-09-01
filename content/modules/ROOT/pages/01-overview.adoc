@@ -1,0 +1,43 @@
+= Overview
+:navtitle: Overview
+
+== Why Automated RHEL Upgrades Matter
+
+Major operating system upgrades are among the highest-risk changes an organization performs. Moving from RHEL 9 to RHEL 10 touches the kernel, the package set, the Python interpreter, and countless configuration files. Done manually, at scale, this work is slow, error-prone, and inconsistent from host to host.
+
+The problems compound quickly:
+
+* *Fleet drift* — hosts sit on different RHEL 9 minor versions (9.5, 9.6, 9.7), each needing different handling.
+* *Silent incompatibilities* — deprecated packages or unsupported configurations can turn an upgrade into an outage.
+* *Under-resourced systems* — a host without enough free memory can fail partway through, leaving it in a broken state.
+* *Human error* — manual steps skipped or run out of order lead to systems that "upgraded" but don't actually work.
+
+Automation solves this by making upgrades *repeatable, validated, and safe*. The same tested process runs against every host, checks are enforced before any destructive action, and results are consistent and auditable.
+
+== What Leapp-O-Matic Does
+
+*Leapp-O-Matic* is the friendly name for the `role-rhel10-upgrader` Ansible role, driven through Ansible Automation Platform. It automates the full RHEL 9 → RHEL 10 journey and, critically, uses LEAPP's pre-upgrade analysis as a *gatekeeper*: it inspects the system before committing to the upgrade and refuses to proceed when the system isn't safe.
+
+The role's guiding principle is *fail safe, not fail late*. Incompatible or under-resourced systems are caught during preflight — before the point of no return — so a bad candidate never ends up half-upgraded.
+
+== What You Will Accomplish
+
+By the end of this lab you will have:
+
+* Configured RHSM credentials securely inside AAP, without hardcoding secrets.
+* Launched an AAP workflow that upgrades a set of RHEL 9 nodes.
+* Observed a workflow *fail safely* on nodes that don't meet requirements (insufficient memory and wrong OS version).
+* Re-run the workflow against compatible nodes and watched them upgrade successfully to RHEL 10.
+* Verified the upgraded systems and reviewed post-upgrade tasks such as configuration-file conflicts.
+
+== The Scenario
+
+You are responsible for upgrading a small fleet of servers to RHEL 10. The fleet is realistically messy:
+
+* Some hosts run RHEL 9.5, others RHEL 9.7 — a mix of minor versions.
+* One host is short on memory.
+* One host is still on RHEL 8 and shouldn't be upgraded directly at all.
+
+Instead of upgrading each host by hand, you will let Leapp-O-Matic decide which systems are safe to upgrade and drive the process through AAP. Along the way you will see exactly why the role's validation is what makes automated upgrades trustworthy.
+
+Before diving into the hands-on steps, continue to the xref:02-details.adoc[Architecture & Design] module to understand how Leapp-O-Matic is structured.
