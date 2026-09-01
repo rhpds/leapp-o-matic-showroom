@@ -405,12 +405,12 @@ The role's intelligent version normalization means you don't need to manually up
 
 * Review the role repository: https://gitlab.com/ansible-ssa/role-rhel10-upgrader
 * Explore the LEAPP upgrade process: https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/upgrading_from_rhel_9_to_rhel_10/index
-* Read about Red Hat Insights integration: https://docs.redhat.com/en/documentation/red_hat_insights
+* Read about Red Hat Insights integration: https://docs.redhat.com/en/documentation/red_hat_insights/1-latest
 * Plan a production upgrade strategy for your environment
 
 == Additional Resources
 
-* **Red Hat Subscription Management:** https://docs.redhat.com/en/documentation/red_hat_subscription_management
+* **Red Hat Subscription Management:** https://docs.redhat.com/en/documentation/subscription_central/1-latest
 * **Upgrading from RHEL 9 to RHEL 10 (LEAPP):** https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/upgrading_from_rhel_9_to_rhel_10/index
 * **RHEL 10 documentation:** https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10
 * **Ansible documentation:** https://docs.ansible.com/ansible/latest/
