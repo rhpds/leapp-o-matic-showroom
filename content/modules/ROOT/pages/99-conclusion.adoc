@@ -21,8 +21,8 @@ Congratulations — you have completed the Leapp-O-Matic lab and automated a RHE
 == References
 
 * Role repository: https://gitlab.com/ansible-ssa/role-rhel10-upgrader[role-rhel10-upgrader]
-* LEAPP upgrade utility: https://access.redhat.com/articles/3555193[Upgrading from RHEL — LEAPP]
-* Red Hat Insights: https://access.redhat.com/documentation/en-us/red_hat_insights[Red Hat Insights documentation]
-* Red Hat Subscription Manager: https://access.redhat.com/documentation/en-us/red_hat_subscription_management/[RHSM documentation]
-* RHEL 10 Release Notes: https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/10/[RHEL 10 documentation]
-* Ansible Automation Platform: https://docs.ansible.com/ansible/latest/[Ansible documentation]
+* Upgrading from RHEL 9 to RHEL 10 (LEAPP): https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/upgrading_from_rhel_9_to_rhel_10/index[Red Hat documentation]
+* Red Hat Insights: https://docs.redhat.com/en/documentation/red_hat_insights[Red Hat Insights documentation]
+* Red Hat Subscription Management: https://docs.redhat.com/en/documentation/red_hat_subscription_management[RHSM documentation]
+* RHEL 10 documentation: https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10[Red Hat Enterprise Linux 10]
+* Ansible documentation: https://docs.ansible.com/ansible/latest/[Ansible documentation]
